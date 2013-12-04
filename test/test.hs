@@ -37,16 +37,16 @@ data TestItem = TestItem
 
 parseTestData :: (MonadThrow m, Applicative m) => SimpleXML -> m TestData
 parseTestData xml = TestData
-    <$> getT xml "id"
-    <*> getT xml "name"
-    <*> getT xml "description"
+    <$> xml .< "id"
+    <*> xml .< "name"
+    <*> xml .< "description"
     <*> getElements xml "itemSet" "item" parseTestItem
 
 parseTestItem :: (MonadThrow m, Applicative m) => SimpleXML -> m TestItem
 parseTestItem xml = TestItem
-    <$> getT xml "id"
-    <*> getT xml "name"
-    <*> getT xml "description"
+    <$> xml .< "id"
+    <*> xml .< "name"
+    <*> xml .< "description"
     <*> getElementM xml "subItem" parseTestItem
 
 parseNormal :: Expectation

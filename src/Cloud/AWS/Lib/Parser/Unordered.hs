@@ -5,7 +5,7 @@ module Cloud.AWS.Lib.Parser.Unordered
     , ParseError (..)
     , xmlParser
     , xmlParserM
-    , getT
+    , getT, (.<)
     , getElementM
     , getElement
     , getElements
@@ -127,6 +127,10 @@ getSubXMLM xml name = listToMaybe $ getSubXMLs xml name
 getT :: (MonadThrow m, FromText a) => SimpleXML -> Text -> m a
 getT xml name = fromNamedText name $
     getSubXMLM xml name >>= getContentText
+
+-- | infix version of getT. like aeson's (.:).
+(.<) :: (MonadThrow m, FromText a) => SimpleXML -> Text -> m a
+(.<) = getT
 
 getElementM :: MonadThrow m => SimpleXML -> Text -> (SimpleXML -> m a) -> m (Maybe a)
 getElementM xml name parse = case getSubXMLM xml name of

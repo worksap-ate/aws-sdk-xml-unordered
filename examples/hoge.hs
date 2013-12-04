@@ -29,18 +29,18 @@ data Foo = Foo
 
 hoge :: (MonadThrow m, Applicative m) => SimpleXML -> m Hoge
 hoge xml = Hoge
-    <$> getT xml "id"
+    <$> xml .< "id"
     <*> getElements xml "fugaSet" "fuga" fuga
 
 fuga :: (MonadThrow m, Applicative m) => SimpleXML -> m Fuga
 fuga xml = Fuga
-    <$> getT xml "name"
-    <*> getT xml "desc"
+    <$> xml .< "name"
+    <*> xml .< "desc"
     <*> getElementM xml "foo" foo
 
 foo :: (MonadThrow m, Applicative m) => SimpleXML -> m Foo
 foo xml = Foo
-    <$> getT xml "bar"
+    <$> xml .< "bar"
 
 hogeTag :: (MonadThrow m, Applicative m) => ConduitM Event o m Hoge
 hogeTag = xmlParser $ \xml -> getElement xml "hoge" hoge
