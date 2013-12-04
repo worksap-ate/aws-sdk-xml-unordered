@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 
 module Cloud.AWS.Lib.Parser.Unordered
-    ( SimpleXML (..)
+    ( SimpleXML
     , ParseError (..)
     , xmlParser
     , xmlParserM
@@ -12,24 +12,23 @@ module Cloud.AWS.Lib.Parser.Unordered
     , getElements
     ) where
 
-import Control.Applicative
+import Cloud.AWS.Lib.FromText (FromText (..))
+import Control.Applicative ((<$>))
 import Control.Exception (Exception)
-import Control.Monad
-import Control.Monad.Trans
-import Data.Char
-import Data.Conduit
+import Control.Monad (liftM)
+import Control.Monad.Trans (lift)
+import Data.Char (isSpace)
+import Data.Conduit (ConduitM, Conduit, yield, MonadThrow (..))
 import qualified Data.Conduit.List as CL
-import Data.Maybe
-import Data.Monoid
-import qualified Data.Text as T
-import Data.Typeable (Typeable)
-import Data.XML.Types
-import Text.XML.Stream.Parse
-
 import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as HM
-
-import Cloud.AWS.Lib.FromText
+import Data.Maybe (listToMaybe)
+import Data.Monoid ((<>))
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Typeable (Typeable)
+import Data.XML.Types (Event (..), Name (..), Content (..))
+import Text.XML.Stream.Parse (XmlException (..))
 
 data SimpleXML = Map (HashMap Text [SimpleXML])
                | Content Text

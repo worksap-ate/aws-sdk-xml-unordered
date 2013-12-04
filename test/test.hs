@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import Control.Applicative
+import Control.Applicative ((<$>), (<*>), Applicative)
 import qualified Data.ByteString.Lazy as L
-import Data.Conduit
+import Data.Conduit (($$), ($=), MonadThrow (..), runResourceT)
 import qualified Data.Conduit.List as CL
 import Data.Text (Text)
 import Test.Hspec
-import Text.XML.Stream.Parse
+import Text.XML.Stream.Parse (parseLBS, def)
 
 import Cloud.AWS.Lib.Parser.Unordered
 
