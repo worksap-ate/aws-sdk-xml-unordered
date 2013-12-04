@@ -19,6 +19,7 @@ main = hspec $
         it "parse xml which does not contain itemSet tag" parseNotAppearItemSet
         it "cannot parse unexpected xml structure" notParseUnexpectedDataStructure
         it "ignore unexpected tag" ignoreUnexpectedTag
+        it "parse top data set" parseTopDataSet
 
 data TestData = TestData
     { testDataId :: Int
@@ -250,3 +251,40 @@ ignoreUnexpectedTag = do
         , testDataDescription = Nothing
         , testDataItemsSet = []
         }
+
+parseTopDataSet :: Expectation
+parseTopDataSet = do
+    d <- runResourceT $ parseLBS def input $$
+        xmlParser (\xml -> getElements xml "dataSet" "data" parseTestData)
+    d `shouldBe` input'
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<dataSet>"
+        , "  <data>"
+        , "    <id>1</id>"
+        , "    <name>test1</name>"
+        , "    <itemSet>"
+        , "    </itemSet>"
+        , "    <description>this is test 1</description>"
+        , "  </data>"
+        , "  <data>"
+        , "    <id>2</id>"
+        , "    <name>test2</name>"
+        , "  </data>"
+        , "</dataSet>"
+        ]
+    input' =
+        [ TestData
+            { testDataId = 1
+            , testDataName = "test1"
+            , testDataDescription = Just "this is test 1"
+            , testDataItemsSet = []
+            }
+        , TestData
+            { testDataId = 2
+            , testDataName = "test2"
+            , testDataDescription = Nothing
+            , testDataItemsSet = []
+            }
+        ]
