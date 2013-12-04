@@ -64,16 +64,14 @@ xmlParserConduit set parse = do
     case e of
         Just (EventBeginElement name _) | nameLocalName name == set -> do
             CL.drop 1
-            ma <- xmlParserM parse
-            case ma of
-                Just a -> yield a >> xmlParserConduit set parse
-                Nothing -> return ()
-        Just (EventBeginElement _ _) -> do
-            ma <- xmlParserM parse
-            case ma of
-                Just a -> yield a >> xmlParserConduit set parse
-                Nothing -> return ()
-        _ -> return ()
+            innerParser parse
+        _ -> monadThrow $ ParseError $ "xmlParserConduit: no element '" <> set <> "'"
+  where
+    innerParser parse' = do
+        ma <- xmlParserM parse'
+        case ma of
+            Just a -> yield a >> innerParser parse'
+            Nothing -> return ()
 
 getXML :: MonadThrow m
        => ConduitM Event o m (Maybe SimpleXML)
