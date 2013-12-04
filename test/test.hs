@@ -22,8 +22,9 @@ main = hspec $ do
         it "parse top data set" parseTopDataSet
     describe "xml parser of maybe version" $
         it "parse empty xml" parseEmpty
-    describe "xml parser of conduit version" $
-        it "parse top data set" parseTopDataSetConduit
+    describe "xml parser of conduit version" $ do
+        it "parse normal xml" parseTopDataSetConduit
+        it "parse empty itemSet" parseEmptyItemSetConduit
 
 data TestData = TestData
     { testDataId :: Int
@@ -330,3 +331,17 @@ parseTopDataSetConduit = do
             , testDataItemsSet = []
             }
         ]
+
+parseEmptyItemSetConduit :: Expectation
+parseEmptyItemSetConduit = do
+    d <- runResourceT $ parseLBS def input $=
+        xmlParserConduit "dataSet" (\xml -> getElement xml "data" parseTestData) $$
+        CL.consume
+    d `shouldBe` input'
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<dataSet>"
+        , "</dataSet>"
+        ]
+    input' = []
