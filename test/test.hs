@@ -14,6 +14,7 @@ main = hspec $ do
     describe "xml parser" $ do
         it "parse normal xml" parseNormal
         it "parse xml which contains unordered elements" parseUnordered
+        it "parse empty xml" parseEmpty
 
 data TestData = TestData
     { testDataId :: Int
@@ -148,3 +149,11 @@ parseUnordered = do
                 }
             ]
         }
+
+parseEmpty :: Expectation
+parseEmpty = do
+    d <- runResourceT $ parseLBS def input $$ xmlParser (\xml -> getElementM xml "data" parseTestData)
+    d `shouldBe` input'
+  where
+    input = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+    input' = Nothing
