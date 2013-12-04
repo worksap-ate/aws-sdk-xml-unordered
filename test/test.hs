@@ -152,7 +152,7 @@ parseUnordered = do
 
 parseEmpty :: Expectation
 parseEmpty = do
-    d <- runResourceT $ parseLBS def input $$ xmlParser (\xml -> getElementM xml "data" parseTestData)
+    d <- runResourceT $ parseLBS def input $$ xmlParserM (\xml -> getElement xml "data" parseTestData)
     d `shouldBe` input'
   where
     input = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"

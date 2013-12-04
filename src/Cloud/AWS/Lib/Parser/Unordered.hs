@@ -4,6 +4,7 @@ module Cloud.AWS.Lib.Parser.Unordered
     ( SimpleXML (..)
     , ParseError (..)
     , xmlParser
+    , xmlParserM
     , getT
     , getElementM
     , getElement
@@ -39,13 +40,19 @@ data ParseError = ParseError
 instance Exception ParseError
 
 xmlParser :: MonadThrow m
-    => (SimpleXML -> m a)
-    -> ConduitM Event o m a
-xmlParser parse = do
+          => (SimpleXML -> m a)
+          -> ConduitM Event o m a
+xmlParser parse = xmlParserM parse >>=
+    maybe (lift $ monadThrow $ ParseError "xmlParser: invalid xml") return
+
+xmlParserM :: MonadThrow m
+           => (SimpleXML -> m a)
+           -> ConduitM Event o m (Maybe a)
+xmlParserM parse = do
     xmlm <- getXML
     case xmlm of
-        Just xml -> lift $ parse xml
-        Nothing -> lift $ monadThrow $ ParseError "xml: invalid xml"
+        Just xml -> lift $ liftM Just $ parse xml
+        Nothing -> return Nothing
 
 getXML :: MonadThrow m
        => ConduitM Event o m (Maybe SimpleXML)
