@@ -17,7 +17,8 @@ main = hspec $
         it "parse empty xml" parseEmpty
         it "parse xml which contains empty list" parseEmptyList
         it "parse xml which does not contain itemSet tag" parseNotAppearItemSet
-        it "cannot parse unexpected xml" notParseUnexpectedData
+        it "cannot parse unexpected xml structure" notParseUnexpectedDataStructure
+        it "ignore unexpected tag" ignoreUnexpectedTag
 
 data TestData = TestData
     { testDataId :: Int
@@ -207,8 +208,8 @@ parseNotAppearItemSet = do
         , testDataItemsSet = []
         }
 
-notParseUnexpectedData :: Expectation
-notParseUnexpectedData =
+notParseUnexpectedDataStructure :: Expectation
+notParseUnexpectedDataStructure =
     runResourceT (parseLBS def input $$
         xmlParser (\xml -> getElement xml "data" parseTestData))
         `shouldThrow` errorCall "FromText error: no text name=name"
@@ -223,3 +224,29 @@ notParseUnexpectedData =
         , "  </name>"
         , "</data>"
         ]
+
+ignoreUnexpectedTag :: Expectation
+ignoreUnexpectedTag = do
+    d <- runResourceT $ parseLBS def input $$
+        xmlParser (\xml -> getElement xml "data" parseTestData)
+    d `shouldBe` input'
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<data>"
+        , "  <id>1</id>"
+        , "  <unexpectedTag>tag</unexpectedTag>"
+        , "  <name>test</name>"
+        , "  <itemSet>"
+        , "    <unexpectedTag>tag</unexpectedTag>"
+        , "    <unexpectedTag>tag</unexpectedTag>"
+        , "  </itemSet>"
+        , "  <unexpectedTag>tag</unexpectedTag>"
+        , "</data>"
+        ]
+    input' = TestData
+        { testDataId = 1
+        , testDataName = "test"
+        , testDataDescription = Nothing
+        , testDataItemsSet = []
+        }
