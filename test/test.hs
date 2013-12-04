@@ -3,6 +3,7 @@
 import Control.Applicative
 import qualified Data.ByteString.Lazy as L
 import Data.Conduit
+import qualified Data.Conduit.List as CL
 import Data.Text (Text)
 import Test.Hspec
 import Text.XML.Stream.Parse
@@ -10,16 +11,19 @@ import Text.XML.Stream.Parse
 import Cloud.AWS.Lib.Parser.Unordered
 
 main :: IO ()
-main = hspec $
+main = hspec $ do
     describe "xml parser" $ do
         it "parse normal xml" parseNormal
         it "parse xml which contains unordered elements" parseUnordered
-        it "parse empty xml" parseEmpty
         it "parse xml which contains empty list" parseEmptyList
         it "parse xml which does not contain itemSet tag" parseNotAppearItemSet
         it "cannot parse unexpected xml structure" notParseUnexpectedDataStructure
         it "ignore unexpected tag" ignoreUnexpectedTag
         it "parse top data set" parseTopDataSet
+    describe "xml parser of maybe version" $
+        it "parse empty xml" parseEmpty
+    describe "xml parser of conduit version" $
+        it "parse top data set" parseTopDataSetConduit
 
 data TestData = TestData
     { testDataId :: Int
@@ -256,6 +260,44 @@ parseTopDataSet :: Expectation
 parseTopDataSet = do
     d <- runResourceT $ parseLBS def input $$
         xmlParser (\xml -> getElements xml "dataSet" "data" parseTestData)
+    d `shouldBe` input'
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<dataSet>"
+        , "  <data>"
+        , "    <id>1</id>"
+        , "    <name>test1</name>"
+        , "    <itemSet>"
+        , "    </itemSet>"
+        , "    <description>this is test 1</description>"
+        , "  </data>"
+        , "  <data>"
+        , "    <id>2</id>"
+        , "    <name>test2</name>"
+        , "  </data>"
+        , "</dataSet>"
+        ]
+    input' =
+        [ TestData
+            { testDataId = 1
+            , testDataName = "test1"
+            , testDataDescription = Just "this is test 1"
+            , testDataItemsSet = []
+            }
+        , TestData
+            { testDataId = 2
+            , testDataName = "test2"
+            , testDataDescription = Nothing
+            , testDataItemsSet = []
+            }
+        ]
+
+parseTopDataSetConduit :: Expectation
+parseTopDataSetConduit = do
+    d <- runResourceT $ parseLBS def input $=
+        xmlParserConduit "dataSet" (\xml -> getElement xml "data" parseTestData) $$
+        CL.consume
     d `shouldBe` input'
   where
     input = L.concat

@@ -5,6 +5,7 @@ module Cloud.AWS.Lib.Parser.Unordered
     , ParseError (..)
     , xmlParser
     , xmlParserM
+    , xmlParserConduit
     , getT, (.<)
     , getElementM
     , getElement
@@ -53,6 +54,26 @@ xmlParserM parse = do
     case xmlm of
         Just xml -> lift $ liftM Just $ parse xml
         Nothing -> return Nothing
+
+xmlParserConduit :: MonadThrow m
+                 => Text -- ^ name of item set
+                 -> (SimpleXML -> m a) -- ^ item parser
+                 -> Conduit Event m a
+xmlParserConduit set parse = do
+    e <- dropWS
+    case e of
+        Just (EventBeginElement name _) | nameLocalName name == set -> do
+            CL.drop 1
+            ma <- xmlParserM parse
+            case ma of
+                Just a -> yield a >> xmlParserConduit set parse
+                Nothing -> return ()
+        Just (EventBeginElement _ _) -> do
+            ma <- xmlParserM parse
+            case ma of
+                Just a -> yield a >> xmlParserConduit set parse
+                Nothing -> return ()
+        _ -> return ()
 
 getXML :: MonadThrow m
        => ConduitM Event o m (Maybe SimpleXML)
