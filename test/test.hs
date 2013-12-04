@@ -13,6 +13,7 @@ main :: IO ()
 main = hspec $ do
     describe "xml parser" $ do
         it "parse normal xml" parseNormal
+        it "parse xml which contains unordered elements" parseUnordered
 
 data TestData = TestData
     { testDataId :: Int
@@ -68,6 +69,59 @@ parseNormal = do
         , "      <name>item2</name>"
         , "    </item>"
         , "  </itemSet>"
+        , "</data>"
+        ]
+    input' = TestData
+        { testDataId = 1
+        , testDataName = "test"
+        , testDataDescription = Just "this is test"
+        , testDataItemsSet =
+            [ TestItem
+                { testItemId = 1
+                , testItemName = "item1"
+                , testItemDescription = Just "this is item1"
+                , testItemSubItem = Just TestItem
+                    { testItemId = 11
+                    , testItemName = "item1sub"
+                    , testItemDescription = Nothing
+                    , testItemSubItem = Nothing
+                    }
+                }
+            , TestItem
+                { testItemId = 2
+                , testItemName = "item2"
+                , testItemDescription = Nothing
+                , testItemSubItem = Nothing
+                }
+            ]
+        }
+
+parseUnordered :: Expectation
+parseUnordered = do
+    d <- runResourceT $ parseLBS def input $$ xmlParser (\xml -> getElement xml "data" parseTestData)
+    d `shouldBe` input'
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<data>"
+        , "  <name>test</name>"
+        , "  <itemSet>"
+        , "    <item>"
+        , "      <name>item1</name>"
+        , "      <id>1</id>"
+        , "      <subItem>"
+        , "        <name>item1sub</name>"
+        , "        <id>11</id>"
+        , "      </subItem>"
+        , "      <description>this is item1</description>"
+        , "    </item>"
+        , "    <item>"
+        , "      <name>item2</name>"
+        , "      <id>2</id>"
+        , "    </item>"
+        , "  </itemSet>"
+        , "  <description>this is test</description>"
+        , "  <id>1</id>"
         , "</data>"
         ]
     input' = TestData
