@@ -16,6 +16,7 @@ main = hspec $ do
         it "parse xml which contains unordered elements" parseUnordered
         it "parse empty xml" parseEmpty
         it "parse xml which contains empty list" parseEmptyList
+        it "parse xml which does not contain itemSet tag" parseNotAppearItemSet
 
 data TestData = TestData
     { testDataId :: Int
@@ -47,7 +48,8 @@ parseTestItem xml = TestItem
 
 parseNormal :: Expectation
 parseNormal = do
-    d <- runResourceT $ parseLBS def input $$ xmlParser (\xml -> getElement xml "data" parseTestData)
+    d <- runResourceT $ parseLBS def input $$
+        xmlParser (\xml -> getElement xml "data" parseTestData)
     d `shouldBe` input'
   where
     input = L.concat
@@ -100,7 +102,8 @@ parseNormal = do
 
 parseUnordered :: Expectation
 parseUnordered = do
-    d <- runResourceT $ parseLBS def input $$ xmlParser (\xml -> getElement xml "data" parseTestData)
+    d <- runResourceT $ parseLBS def input $$
+        xmlParser (\xml -> getElement xml "data" parseTestData)
     d `shouldBe` input'
   where
     input = L.concat
@@ -153,7 +156,8 @@ parseUnordered = do
 
 parseEmpty :: Expectation
 parseEmpty = do
-    d <- runResourceT $ parseLBS def input $$ xmlParserM (\xml -> getElement xml "data" parseTestData)
+    d <- runResourceT $ parseLBS def input $$
+        xmlParserM (\xml -> getElement xml "data" parseTestData)
     d `shouldBe` input'
   where
     input = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -179,5 +183,25 @@ parseEmptyList = do
         { testDataId = 1
         , testDataName = "test"
         , testDataDescription = Just "this is test"
+        , testDataItemsSet = []
+        }
+
+parseNotAppearItemSet :: Expectation
+parseNotAppearItemSet = do
+    d <- runResourceT $ parseLBS def input $$
+        xmlParser (\xml -> getElement xml "data" parseTestData)
+    d `shouldBe` input'
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<data>"
+        , "  <id>1</id>"
+        , "  <name>test</name>"
+        , "</data>"
+        ]
+    input' = TestData
+        { testDataId = 1
+        , testDataName = "test"
+        , testDataDescription = Nothing
         , testDataItemsSet = []
         }
