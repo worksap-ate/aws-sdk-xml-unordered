@@ -10,13 +10,14 @@ import Text.XML.Stream.Parse
 import Cloud.AWS.Lib.Parser.Unordered
 
 main :: IO ()
-main = hspec $ do
+main = hspec $
     describe "xml parser" $ do
         it "parse normal xml" parseNormal
         it "parse xml which contains unordered elements" parseUnordered
         it "parse empty xml" parseEmpty
         it "parse xml which contains empty list" parseEmptyList
         it "parse xml which does not contain itemSet tag" parseNotAppearItemSet
+        it "cannot parse unexpected xml" notParseUnexpectedData
 
 data TestData = TestData
     { testDataId :: Int
@@ -205,3 +206,20 @@ parseNotAppearItemSet = do
         , testDataDescription = Nothing
         , testDataItemsSet = []
         }
+
+notParseUnexpectedData :: Expectation
+notParseUnexpectedData =
+    runResourceT (parseLBS def input $$
+        xmlParser (\xml -> getElement xml "data" parseTestData))
+        `shouldThrow` errorCall "FromText error: no text name=name"
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<data>"
+        , "  <id>1</id>"
+        , "  <name>"
+        , "    <first>foo</first>"
+        , "    <last>bar</last>"
+        , "  </name>"
+        , "</data>"
+        ]
