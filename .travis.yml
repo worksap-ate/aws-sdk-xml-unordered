@@ -1,1 +1,4 @@
 language: haskell
+
+before_install:
+    - export PATH=/usr/lib/ghc/bin:$PATH # for hsc2hs
