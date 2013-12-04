@@ -15,6 +15,7 @@ main = hspec $ do
         it "parse normal xml" parseNormal
         it "parse xml which contains unordered elements" parseUnordered
         it "parse empty xml" parseEmpty
+        it "parse xml which contains empty list" parseEmptyList
 
 data TestData = TestData
     { testDataId :: Int
@@ -157,3 +158,26 @@ parseEmpty = do
   where
     input = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
     input' = Nothing
+
+parseEmptyList :: Expectation
+parseEmptyList = do
+    d <- runResourceT $ parseLBS def input $$
+        xmlParser (\xml -> getElement xml "data" parseTestData)
+    d `shouldBe` input'
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<data>"
+        , "  <id>1</id>"
+        , "  <name>test</name>"
+        , "  <description>this is test</description>"
+        , "  <itemSet>"
+        , "  </itemSet>"
+        , "</data>"
+        ]
+    input' = TestData
+        { testDataId = 1
+        , testDataName = "test"
+        , testDataDescription = Just "this is test"
+        , testDataItemsSet = []
+        }
