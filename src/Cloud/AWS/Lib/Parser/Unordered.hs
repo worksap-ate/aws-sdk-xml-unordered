@@ -10,6 +10,7 @@ module Cloud.AWS.Lib.Parser.Unordered
     , getElementM
     , getElement
     , getElements
+    , content
     ) where
 
 import Cloud.AWS.Lib.FromText (FromText (..))
@@ -163,3 +164,7 @@ getElements :: MonadThrow m => SimpleXML -> Text -> Text -> (SimpleXML -> m a) -
 getElements xml set item parse = case getSubXMLM xml set of
     Just xml' -> mapM parse $ getSubXMLs xml' item
     Nothing -> return []
+
+content :: MonadThrow m => SimpleXML -> m Text
+content (Content t) = return t
+content _           = fail "This is not a content."
