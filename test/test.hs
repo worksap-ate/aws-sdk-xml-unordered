@@ -20,6 +20,8 @@ main = hspec $ do
         it "cannot parse unexpected xml structure" notParseUnexpectedDataStructure
         it "ignore unexpected tag" ignoreUnexpectedTag
         it "parse top data set" parseTopDataSet
+        it "parse list of text" parseList
+        it "cannot parse list of text" parseListFailure
     describe "xml parser of maybe version" $
         it "parse empty xml" parseEmpty
     describe "xml parser of conduit version" $ do
@@ -345,3 +347,32 @@ parseEmptyItemSetConduit = do
         , "</dataSet>"
         ]
     input' = []
+
+parseList :: Expectation
+parseList = do
+    d <- runResourceT $ parseLBS def input $$
+        xmlParser (\xml -> getElements xml "dataSet" "data" content)
+    d `shouldBe` input'
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<dataSet>"
+        , "<data>item</data>"
+        , "<data>item</data>"
+        , "<data>item</data>"
+        , "</dataSet>"
+        ]
+    input' = ["item", "item", "item"]
+
+parseListFailure :: Expectation
+parseListFailure = do
+    runResourceT $ parseLBS def input $$
+        xmlParser (\xml -> getElements xml "dataSet" "data" content)
+    `shouldThrow` errorCall "This is not a content."
+  where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<dataSet>"
+        , "<data><dummy/></data>"
+        , "</dataSet>"
+        ]
