@@ -22,6 +22,8 @@ main = hspec $ do
         it "parse top data set" parseTopDataSet
         it "parse list of text" parseList
         it "cannot parse list of text" parseListFailure
+        it "parse top level elements" parseTopElements
+        it "parse escaped content" parseEscaped
     describe "xml parser of maybe version" $
         it "parse empty xml" parseEmpty
     describe "xml parser of conduit version" $ do
@@ -376,3 +378,36 @@ parseListFailure = do
         , "<data><dummy/></data>"
         , "</dataSet>"
         ]
+
+parseTopElements :: Expectation
+parseTopElements = do
+    d <- runResourceT $ parseLBS def input $$
+        xmlParser (\xml -> (,,)
+            <$> xml .< "itemA"
+            <*> xml .< "itemB"
+            <*> getElements xml "itemSet" "item" (\xml' ->
+                getElements xml' "itemSet" "item" content
+                )
+        )
+    d `shouldBe` input'
+  where
+    input = L.concat
+        [ "<itemA>item-a</itemA>"
+        , "<itemB>item-b</itemB>"
+        , "<itemSet>"
+        , "  <item>"
+        , "    <itemSet>"
+        , "      <item>a</item>"
+        , "    </itemSet>"
+        , "  </item>"
+        , "</itemSet>"
+        ]
+    input' = ("item-a", "item-b", [["a"]]) :: (Text, Text, [[Text]])
+
+parseEscaped :: Expectation
+parseEscaped = do
+    d <- runResourceT $ parseLBS def input $$ xmlParser (.< "escaped")
+    d `shouldBe` input'
+  where
+    input = "<escaped>{&quot;version&quot;:&quot;1.0&quot;,&quot;queryDate&quot;:&quot;2013-05-08T21:09:40.443+0000&quot;,&quot;startDate&quot;:&quot;2013-05-08T20:09:00.000+0000&quot;,&quot;statistic&quot;:&quot;Maximum&quot;,&quot;period&quot;:3600,&quot;recentDatapoints&quot;:[6.89],&quot;threshold&quot;:90.5}</escaped>"
+    input' = "{\"version\":\"1.0\",\"queryDate\":\"2013-05-08T21:09:40.443+0000\",\"startDate\":\"2013-05-08T20:09:00.000+0000\",\"statistic\":\"Maximum\",\"period\":3600,\"recentDatapoints\":[6.89],\"threshold\":90.5}" :: Text

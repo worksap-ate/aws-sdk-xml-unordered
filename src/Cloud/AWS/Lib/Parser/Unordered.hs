@@ -33,7 +33,7 @@ import Text.XML.Stream.Parse (XmlException (..))
 
 data SimpleXML = Map (HashMap Text [SimpleXML])
                | Content Text
-               deriving (Show)
+               deriving (Show, Eq)
 
 data ParseError = ParseError
     { parseErrorMessage :: Text
@@ -50,7 +50,7 @@ xmlParserM :: MonadThrow m
            => (SimpleXML -> m a)
            -> ConduitM Event o m (Maybe a)
 xmlParserM parse = do
-    xmlm <- getXML
+    xmlm <- getMultiXML
     case xmlm of
         Just xml -> lift $ liftM Just $ parse xml
         Nothing -> return Nothing
@@ -67,42 +67,64 @@ xmlParserConduit set parse = do
             innerParser parse
         _ -> monadThrow $ ParseError $ "xmlParserConduit: no element '" <> set <> "'"
   where
+    innerParser :: MonadThrow m => (SimpleXML -> m a) -> Conduit Event m a
     innerParser parse' = do
-        ma <- xmlParserM parse'
-        case ma of
-            Just a -> yield a >> innerParser parse'
+        xmlm <- getSingleXML
+        case xmlm of
+            Just xml -> do
+                a <- lift $ parse' xml
+                yield a
+                innerParser parse'
             Nothing -> return ()
 
-getXML :: MonadThrow m
-       => ConduitM Event o m (Maybe SimpleXML)
-getXML = do
+getSingleXML :: MonadThrow m
+             => ConduitM Event o m (Maybe SimpleXML)
+getSingleXML = do
     e <- dropWS
     case e of
         Just (EventBeginElement name _) -> do
             CL.drop 1
             xmls <- getXMLList
-            let xml = Map $ HM.singleton (nameLocalName name) $ case xmls of
-                    [Content _] -> xmls
-                    _ -> [Map $ foldr (HM.unionWith (++) . toHMap) HM.empty xmls]
+            let xml = Map $ HM.singleton (nameLocalName name) $ foldXML xmls
             e' <- dropWS
             case e' of
                 Just (EventEndElement name')
                     | name == name' -> CL.drop 1 >> return (Just xml)
-                _ -> lift $ monadThrow $ XmlException ("Expected end tag: " ++ show name) e'
+                _ -> lift $ monadThrow $ XmlException ("getSingleXML: Expected end tag for: " ++ show name) e'
         Just (EventContent (ContentText t)) -> CL.drop 1 >> return (Just $ Content t)
         _ -> return Nothing
+
+foldXML :: [SimpleXML] -> [SimpleXML]
+foldXML [] = []
+foldXML xmls@(Content _ : _) = [Content $ T.concat . map toContent $ xmls]
   where
-    getXMLList = do
-        e <- dropWS
-        case e of
-            Just EventEndElement{} -> return []
-            _ -> do
-                xml <- getXML
-                case xml of
-                    Just xml' -> (xml' :) <$> getXMLList
-                    Nothing -> return []
+    toContent (Map _) = error $ "getSingleXML: Unexpected structure. Please report. " ++ show xmls
+    toContent (Content t) = t
+foldXML xmls@(Map _ : _) = case [Map $ foldr (HM.unionWith (++) . toHMap) HM.empty xmls] of
+    [Map hmap] | hmap == HM.fromList [] -> []
+    xmls' -> xmls'
+  where
     toHMap (Map hmap) = hmap
-    toHMap _ = error "toHMap: invalid structure"
+    toHMap _ = error $ "getSingleXML: Unexpected structure. Please report. " ++ show xmls
+
+getMultiXML :: MonadThrow m
+            => ConduitM Event o m (Maybe SimpleXML)
+getMultiXML = do
+    xmls <- getXMLList
+    return $ listToMaybe $ foldXML xmls
+
+getXMLList :: MonadThrow m
+           => ConduitM Event o m [SimpleXML]
+getXMLList = do
+    e <- dropWS
+    case e of
+        Just EventEndElement{} -> return []
+        Nothing -> return []
+        _ -> do
+            xml <- getSingleXML
+            case xml of
+                Just xml' -> (xml' :) <$> getXMLList
+                Nothing -> return []
 
 dropWS :: Monad m => ConduitM Event o m (Maybe Event)
 dropWS = do -- drop white space
