@@ -439,7 +439,7 @@ parseNewVersion = do
     d `shouldBe` input'
   where
     mapElem = N.elementConduit ["data"]
-    sink = N.convert (\el -> N.element el "data" dataConv)
+    sink = N.convert dataConv
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<data>"
@@ -501,9 +501,9 @@ parseEC2Response = do
   where
     mapElem = N.elementConduit ["requestId", "data", "nextToken"]
     sink = do
-        rid <- N.tryConvert (N..< "requestId")
-        d <- N.consumeElements $ \el -> N.element el "data" dataConv
-        nt <- N.tryConvert (N..< "nextToken")
+        rid <- N.tryConvert N.content
+        d <- N.consumeElements dataConv
+        nt <- N.tryConvert N.content
         return (rid, d, nt)
     input hasReqId hasNextToken = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
