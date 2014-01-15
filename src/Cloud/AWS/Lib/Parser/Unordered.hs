@@ -5,6 +5,8 @@ module Cloud.AWS.Lib.Parser.Unordered
     , ParseError (..)
     , xmlParser
     , xmlParserM
+    , xmlParserSingle
+    , xmlParserSingleM
     , xmlParserConduit
     , getT, (.<)
     , getElementM
@@ -55,6 +57,21 @@ xmlParserM parse = do
         Just xml -> lift $ liftM Just $ parse xml
         Nothing -> return Nothing
 
+xmlParserSingle :: MonadThrow m
+                => (SimpleXML -> m a)
+                -> ConduitM Event o m a
+xmlParserSingle parse = xmlParserSingleM parse >>=
+    maybe (lift $ monadThrow $ ParseError "xmlParserSingle: invalid xml") return
+
+xmlParserSingleM :: MonadThrow m
+                 => (SimpleXML -> m a)
+                 -> ConduitM Event o m (Maybe a)
+xmlParserSingleM parse = do
+    xmlm <- getSingleXML
+    case xmlm of
+        Just xml -> lift $ liftM Just $ parse xml
+        Nothing -> return Nothing
+
 xmlParserConduit :: MonadThrow m
                  => Text -- ^ name of item set
                  -> (SimpleXML -> m a) -- ^ item parser
@@ -67,7 +84,6 @@ xmlParserConduit set parse = do
             innerParser parse
         _ -> monadThrow $ ParseError $ "xmlParserConduit: no element '" <> set <> "'"
   where
-    innerParser :: MonadThrow m => (SimpleXML -> m a) -> Conduit Event m a
     innerParser parse' = do
         xmlm <- getSingleXML
         case xmlm of

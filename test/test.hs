@@ -10,6 +10,10 @@ import Text.XML.Stream.Parse (parseLBS, def)
 
 import Cloud.AWS.Lib.Parser.Unordered
 
+import qualified Cloud.AWS.Lib.Parser.Unordered.Types as N
+import qualified Cloud.AWS.Lib.Parser.Unordered.Conduit as N
+import qualified Cloud.AWS.Lib.Parser.Unordered.Convert as N
+
 main :: IO ()
 main = hspec $ do
     describe "xml parser" $ do
@@ -29,6 +33,9 @@ main = hspec $ do
     describe "xml parser of conduit version" $ do
         it "parse normal xml" parseTopDataSetConduit
         it "parse empty itemSet" parseEmptyItemSetConduit
+    describe "new version" $ do
+        it "can parse normal xml" parseNewVersion
+        it "can parse ec2response-like xml" parseEC2Response
 
 data TestData = TestData
     { testDataId :: Int
@@ -411,3 +418,124 @@ parseEscaped = do
   where
     input = "<escaped>{&quot;version&quot;:&quot;1.0&quot;,&quot;queryDate&quot;:&quot;2013-05-08T21:09:40.443+0000&quot;,&quot;startDate&quot;:&quot;2013-05-08T20:09:00.000+0000&quot;,&quot;statistic&quot;:&quot;Maximum&quot;,&quot;period&quot;:3600,&quot;recentDatapoints&quot;:[6.89],&quot;threshold&quot;:90.5}</escaped>"
     input' = "{\"version\":\"1.0\",\"queryDate\":\"2013-05-08T21:09:40.443+0000\",\"startDate\":\"2013-05-08T20:09:00.000+0000\",\"statistic\":\"Maximum\",\"period\":3600,\"recentDatapoints\":[6.89],\"threshold\":90.5}" :: Text
+
+dataConv :: (MonadThrow m, Applicative m) => N.XmlElement -> m TestData
+dataConv el = TestData
+    <$> el N..< "id"
+    <*> el N..< "name"
+    <*> el N..< "description"
+    <*> N.elements el "itemSet" "item" itemConv
+
+itemConv :: (MonadThrow m, Applicative m) => N.XmlElement -> m TestItem
+itemConv el = TestItem
+    <$> el N..< "id"
+    <*> el N..< "name"
+    <*> el N..< "description"
+    <*> N.elementM el "subItem" itemConv
+
+parseNewVersion :: Expectation
+parseNewVersion = do
+    d <- runResourceT $ parseLBS def input $= mapElem $$ sink
+    d `shouldBe` input'
+  where
+    mapElem = N.elementConduit ["data"]
+    sink = N.convert (\el -> N.element el "data" dataConv)
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<data>"
+        , "  <id>1</id>"
+        , "  <name>test</name>"
+        , "  <description>this is test</description>"
+        , "  <itemSet>"
+        , "    <item>"
+        , "      <id>1</id>"
+        , "      <name>item1</name>"
+        , "      <description>this is item1</description>"
+        , "      <subItem>"
+        , "        <id>11</id>"
+        , "        <name>item1sub</name>"
+        , "      </subItem>"
+        , "    </item>"
+        , "    <item>"
+        , "      <id>2</id>"
+        , "      <name>item2</name>"
+        , "    </item>"
+        , "  </itemSet>"
+        , "</data>"
+        ]
+    input' = TestData
+        { testDataId = 1
+        , testDataName = "test"
+        , testDataDescription = Just "this is test"
+        , testDataItemsSet =
+            [ TestItem
+                { testItemId = 1
+                , testItemName = "item1"
+                , testItemDescription = Just "this is item1"
+                , testItemSubItem = Just TestItem
+                    { testItemId = 11
+                    , testItemName = "item1sub"
+                    , testItemDescription = Nothing
+                    , testItemSubItem = Nothing
+                    }
+                }
+            , TestItem
+                { testItemId = 2
+                , testItemName = "item2"
+                , testItemDescription = Nothing
+                , testItemSubItem = Nothing
+                }
+            ]
+        }
+
+parseEC2Response :: Expectation
+parseEC2Response = do
+    (rid, d, nt) <- runResourceT $ parseLBS def (input True False) $= mapElem $$ sink
+    rid `shouldBe` Just ("req-id" :: Text)
+    d `shouldBe` input'
+    nt `shouldBe` (Nothing :: Maybe Text)
+    (rid', d', nt') <- runResourceT $ parseLBS def (input False True) $= mapElem $$ sink
+    rid' `shouldBe` Nothing
+    d' `shouldBe` input'
+    nt' `shouldBe` Just "next-token"
+  where
+    mapElem = N.elementConduit ["requestId", "data", "nextToken"]
+    sink = do
+        rid <- N.tryConvert (N..< "requestId")
+        d <- N.consumeElements $ \el -> N.element el "data" dataConv
+        nt <- N.tryConvert (N..< "nextToken")
+        return (rid, d, nt)
+    input hasReqId hasNextToken = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<response>"
+        , if hasReqId then "  <requestId>req-id</requestId>" else ""
+        , "  <dataSet>"
+        , "    <data>"
+        , "      <id>1</id>"
+        , "      <name>test1</name>"
+        , "      <itemSet>"
+        , "      </itemSet>"
+        , "      <description>this is test</description>"
+        , "    </data>"
+        , "    <data>"
+        , "      <id>2</id>"
+        , "      <name>test2</name>"
+        , "    </data>"
+        , "  </dataSet>"
+        , if hasNextToken then "  <nextToken>next-token</nextToken>" else ""
+        , "</response>"
+        ]
+    input' =
+        [ TestData
+            { testDataId = 1
+            , testDataName = "test1"
+            , testDataDescription = Just "this is test"
+            , testDataItemsSet = []
+            }
+        , TestData
+            { testDataId = 2
+            , testDataName = "test2"
+            , testDataDescription = Nothing
+            , testDataItemsSet = []
+            }
+        ]
