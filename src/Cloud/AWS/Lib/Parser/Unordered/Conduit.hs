@@ -104,6 +104,9 @@ foldElements els@(HM _ : _)
 convert :: MonadThrow m => (XmlElement -> m a) -> ConduitM XmlElement o m a
 convert conv = await >>= maybe (lift . monadThrow $ ParseError "convert: no element") (lift . conv)
 
+convertConduit :: MonadBaseControl IO m => (XmlElement -> m a) -> Conduit XmlElement m a
+convertConduit conv = tryConvert conv >>= maybe (return ()) yield
+
 -- | if conversion is success, it consume a element. otherwise, it does not consume any elements.
 tryConvert :: MonadBaseControl IO m
            => (XmlElement -> m a)
