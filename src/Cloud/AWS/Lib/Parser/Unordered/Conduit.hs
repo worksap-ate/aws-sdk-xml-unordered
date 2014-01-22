@@ -5,7 +5,6 @@ module Cloud.AWS.Lib.Parser.Unordered.Conduit where
 import Control.Applicative
 import Control.Exception (SomeException)
 import Control.Exception.Lifted (try)
-import Control.Monad ((>=>))
 import Control.Monad.Trans (lift)
 import Data.Char (isSpace)
 import Data.Conduit
@@ -28,7 +27,7 @@ elementConduit names = do
     case e of
         Just e' | isTarget e' -> do
             el <- getElement
-            maybe (return ()) (extract >=> yield) el
+            maybe (return ()) yield el
             elementConduit names
         Nothing -> return ()
         _ -> do
@@ -37,10 +36,6 @@ elementConduit names = do
   where
     isTarget (EventBeginElement name _) = elem (nameLocalName name) names
     isTarget _ = False
-    extract (HM hm) = case HM.elems hm of
-        [[el]] -> return el
-        _ -> monadThrow $ ParseError "elementConduit: Unexpected structure. Please report."
-    extract (T t) = return $ T t
 
 -- | Drop unnecessary event.
 drops :: Monad m => ConduitM Event o m ()
