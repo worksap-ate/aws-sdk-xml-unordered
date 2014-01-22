@@ -22,16 +22,14 @@ main = hspec $ do
         it "parse top data set" parseTopDataSet
         it "parse list of text" parseList
         it "cannot parse list of text" parseListFailure
-        it "parse top level elements" parseTopElements
         it "parse escaped content" parseEscaped
+        it "can parse ec2response-like xml" parseEC2Response
     describe "xml parser of maybe version" $
         it "parse empty xml" parseEmpty
     describe "xml parser of conduit version" $ do
         it "parse normal xml" parseTopDataSetConduit
         it "parse empty itemSet" parseEmptyItemSetConduit
-    describe "new version" $ do
-        it "can parse normal xml" parseNewVersion
-        it "can parse ec2response-like xml" parseEC2Response
+
 
 data TestData = TestData
     { testDataId :: Int
@@ -62,7 +60,7 @@ itemConv xml = TestItem
     <*> elementM "subItem" itemConv xml
 
 sourceData :: MonadThrow m => L.ByteString -> Source m XmlElement
-sourceData input = parseLBS def input $= elementConduit ["data"]
+sourceData input = parseLBS def input $= elementConduit (end "data")
 
 common :: L.ByteString -> IO TestData
 common input = runResourceT $ sourceData input $$ convert (element "data" dataConv)
@@ -265,10 +263,11 @@ ignoreUnexpectedTag = do
 
 parseTopDataSet :: Expectation
 parseTopDataSet = do
-    d <- runResourceT $ sourceData input $$
+    d <- runResourceT $ parseLBS def input $= mapElem $$
         convertMany (element "data" dataConv)
     d `shouldBe` input'
   where
+    mapElem = elementConduit $ "dataSet" .- end "data"
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<dataSet>"
@@ -302,11 +301,12 @@ parseTopDataSet = do
 
 parseTopDataSetConduit :: Expectation
 parseTopDataSetConduit = do
-    d <- runResourceT $ sourceData input $=
+    d <- runResourceT $ parseLBS def input $= mapElem $=
         convertConduit (element "data" dataConv) $$
         CL.consume
     d `shouldBe` input'
   where
+    mapElem = elementConduit $ "dataSet" .- end "data"
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<dataSet>"
@@ -340,11 +340,12 @@ parseTopDataSetConduit = do
 
 parseEmptyItemSetConduit :: Expectation
 parseEmptyItemSetConduit = do
-    d <- runResourceT $ sourceData input $=
+    d <- runResourceT $ parseLBS def input $= mapElem $=
         convertConduit (element "data" dataConv) $$
         CL.consume
     d `shouldBe` input'
   where
+    mapElem = elementConduit $ "dataSet" .- end "data"
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<dataSet>"
@@ -354,10 +355,11 @@ parseEmptyItemSetConduit = do
 
 parseList :: Expectation
 parseList = do
-    d <- runResourceT $ sourceData input $$
+    d <- runResourceT $ parseLBS def input $= mapElem $$
         convertMany (element "data" content)
     d `shouldBe` input'
   where
+    mapElem = elementConduit $ "dataSet" .- end "data"
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<dataSet>"
@@ -381,100 +383,14 @@ parseListFailure = do
         , "</dataSet>"
         ]
 
-parseTopElements :: Expectation
-parseTopElements = do
-    d <- runResourceT $ parseLBS def input $= mapElem $$ conv
-    d `shouldBe` input'
-  where
-    mapElem = elementConduit ["itemA", "itemB", "item"]
-    conv = (,,)
-        <$> convert (.< "itemA")
-        <*> convert (.< "itemB")
-        <*> convertMany (element "item" conv')
-      where
-        conv' = elements "itemSet" "item" content
-    input = L.concat
-        [ "<itemA>item-a</itemA>"
-        , "<itemB>item-b</itemB>"
-        , "<itemSet>"
-        , "  <item>"
-        , "    <itemSet>"
-        , "      <item>a</item>"
-        , "    </itemSet>"
-        , "  </item>"
-        , "  <item>"
-        , "    <itemSet>"
-        , "      <item>b</item>"
-        , "      <item>c</item>"
-        , "    </itemSet>"
-        , "  </item>"
-        , "</itemSet>"
-        ]
-    input' = ("item-a", "item-b", [["a"],["b","c"]]) :: (Text, Text, [[Text]])
-
 parseEscaped :: Expectation
 parseEscaped = do
     d <- runResourceT $ parseLBS def input $= mapElem $$ convert (.< "escaped")
     d `shouldBe` input'
   where
-    mapElem = elementConduit ["escaped"]
+    mapElem = elementConduit $ end "escaped"
     input = "<escaped>{&quot;version&quot;:&quot;1.0&quot;,&quot;queryDate&quot;:&quot;2013-05-08T21:09:40.443+0000&quot;,&quot;startDate&quot;:&quot;2013-05-08T20:09:00.000+0000&quot;,&quot;statistic&quot;:&quot;Maximum&quot;,&quot;period&quot;:3600,&quot;recentDatapoints&quot;:[6.89],&quot;threshold&quot;:90.5}</escaped>"
     input' = "{\"version\":\"1.0\",\"queryDate\":\"2013-05-08T21:09:40.443+0000\",\"startDate\":\"2013-05-08T20:09:00.000+0000\",\"statistic\":\"Maximum\",\"period\":3600,\"recentDatapoints\":[6.89],\"threshold\":90.5}" :: Text
-
-parseNewVersion :: Expectation
-parseNewVersion = do
-    d <- runResourceT $ parseLBS def input $= mapElem $$ sink
-    d `shouldBe` input'
-  where
-    mapElem = elementConduit ["data"]
-    sink = convert $ element "data" dataConv
-    input = L.concat
-        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-        , "<data>"
-        , "  <id>1</id>"
-        , "  <name>test</name>"
-        , "  <description>this is test</description>"
-        , "  <itemSet>"
-        , "    <item>"
-        , "      <id>1</id>"
-        , "      <name>item1</name>"
-        , "      <description>this is item1</description>"
-        , "      <subItem>"
-        , "        <id>11</id>"
-        , "        <name>item1sub</name>"
-        , "      </subItem>"
-        , "    </item>"
-        , "    <item>"
-        , "      <id>2</id>"
-        , "      <name>item2</name>"
-        , "    </item>"
-        , "  </itemSet>"
-        , "</data>"
-        ]
-    input' = TestData
-        { testDataId = 1
-        , testDataName = "test"
-        , testDataDescription = Just "this is test"
-        , testDataItemsSet =
-            [ TestItem
-                { testItemId = 1
-                , testItemName = "item1"
-                , testItemDescription = Just "this is item1"
-                , testItemSubItem = Just TestItem
-                    { testItemId = 11
-                    , testItemName = "item1sub"
-                    , testItemDescription = Nothing
-                    , testItemSubItem = Nothing
-                    }
-                }
-            , TestItem
-                { testItemId = 2
-                , testItemName = "item2"
-                , testItemDescription = Nothing
-                , testItemSubItem = Nothing
-                }
-            ]
-        }
 
 parseEC2Response :: Expectation
 parseEC2Response = do
@@ -487,7 +403,11 @@ parseEC2Response = do
     d' `shouldBe` input'
     nt' `shouldBe` Just "next-token"
   where
-    mapElem = elementConduit ["requestId", "data", "nextToken"]
+    mapElem = elementConduit $ "response" .=
+        [ end "requestId"
+        , "dataSet" .- end "data"
+        , end "nextToken"
+        ]
     sink = do
         rid <- tryConvert (.< "requestId")
         d <- convertMany $ element "data" dataConv
@@ -527,50 +447,3 @@ parseEC2Response = do
             , testDataItemsSet = []
             }
         ]
-
--- parseEC2ResponseConduit :: Expectation
--- parseEC2ResponseConduit = do
---     (src, rid) <- ec2Source
---     rid `shouldBe` Just "req-id"
---   where
---     ec2Source = do
---         src <- parseLBS def input
---         (src', rid) <- src $$+ requestId
---         src' $=++ (cond >> nextToken)
---         return (src', rid)
---     requestId = convert (.< "requestId")
---     cond = convertConduit $ element dataConv "data"
---     input = L.concat
---         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
---         , "<response>"
---         , "  <requestId>req-id</requestId>"
---         , "  <dataSet>"
---         , "    <data>"
---         , "      <id>1</id>"
---         , "      <name>test1</name>"
---         , "      <itemSet>"
---         , "      </itemSet>"
---         , "      <description>this is test</description>"
---         , "    </data>"
---         , "    <data>"
---         , "      <id>2</id>"
---         , "      <name>test2</name>"
---         , "    </data>"
---         , "  </dataSet>"
---         , "  <nextToken>next-token</nextToken>"
---         , "</response>"
---         ]
---     input' =
---         [ TestData
---             { testDataId = 1
---             , testDataName = "test1"
---             , testDataDescription = Just "this is test"
---             , testDataItemsSet = []
---             }
---         , TestData
---             { testDataId = 2
---             , testDataName = "test2"
---             , testDataDescription = Nothing
---             , testDataItemsSet = []
---             }
---         ]

@@ -2,7 +2,10 @@
 
 module Cloud.AWS.Lib.Parser.Unordered
     ( XmlElement
-    , ElementName
+    , ElementPath
+    , (.=)
+    , (.-)
+    , end
     , ParseError (..)
     , elementConduit
     , convert
@@ -19,3 +22,4 @@ module Cloud.AWS.Lib.Parser.Unordered
 import Cloud.AWS.Lib.Parser.Unordered.Types
 import Cloud.AWS.Lib.Parser.Unordered.Conduit
 import Cloud.AWS.Lib.Parser.Unordered.Convert
+import Cloud.AWS.Lib.Parser.Unordered.Path

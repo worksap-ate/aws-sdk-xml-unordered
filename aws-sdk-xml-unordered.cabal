@@ -15,10 +15,12 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Cloud.AWS.Lib.Parser.Unordered
-                       Cloud.AWS.Lib.Parser.Unordered.Types
+  other-modules:       Cloud.AWS.Lib.Parser.Unordered.Types
                        Cloud.AWS.Lib.Parser.Unordered.Convert
                        Cloud.AWS.Lib.Parser.Unordered.Conduit
+                       Cloud.AWS.Lib.Parser.Unordered.Path
   build-depends:       base ==4.*
+                     , containers >=0.5
                      , unordered-containers >=0.2
                      , conduit >=1.0.1
                      , xml-conduit >=0.5

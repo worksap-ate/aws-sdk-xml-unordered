@@ -13,29 +13,45 @@ import qualified Data.HashMap.Strict as HM
 import Data.Maybe (maybeToList)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
+import Data.Tree
 import Data.XML.Types
 
 import Cloud.AWS.Lib.Parser.Unordered.Types
 
 -- | map from 'Event' to 'XmlElement'.
 elementConduit :: MonadThrow m
-              => [ElementName]
+              => ElementPath
               -> Conduit Event m XmlElement
-elementConduit names = do
-    drops
-    e <- CL.peek
-    case e of
-        Just e' | isTarget e' -> do
-            el <- getElement
-            maybe (return ()) yield el
-            elementConduit names
-        Nothing -> return ()
-        _ -> do
-            CL.drop 1
-            elementConduit names
+elementConduit tree = go []
   where
-    isTarget (EventBeginElement name _) = elem (nameLocalName name) names
-    isTarget _ = False
+    snoc l x = l ++ [x]
+
+    treeElem [path] (Node root []) = root == path
+    treeElem (path : paths) (Node root forest)
+        | root == path = any (treeElem paths) forest
+        | otherwise = False
+    treeElem _ _ = False
+
+    isTarget name now = treeElem (snoc now $ nameLocalName name) tree
+
+    go now = do
+        drops
+        e <- CL.peek
+        case e of
+            Just (EventBeginElement name _) | isTarget name now -> do
+                el <- getElement
+                maybe (return ()) yield el
+                go now
+            Just (EventBeginElement name _) -> do
+                CL.drop 1
+                go $ snoc now $ nameLocalName name
+            Just (EventEndElement name) -> do
+                CL.drop 1
+                if last now == nameLocalName name
+                    then go $ init now
+                    else error "elementConduit: invalid XML"
+            Nothing -> return ()
+            _ -> CL.drop 1 >> go now
 
 -- | Drop unnecessary event.
 drops :: Monad m => ConduitM Event o m ()
