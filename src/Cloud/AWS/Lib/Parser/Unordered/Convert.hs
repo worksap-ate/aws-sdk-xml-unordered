@@ -32,28 +32,44 @@ getSubElements (T _) _ = []
 getSubElement :: XmlElement -> Text -> Maybe XmlElement
 getSubElement el = listToMaybe . getSubElements el
 
--- | a operator like aeson's (.:).
+-- | the operator like aeson's (.:).
 (.<) :: (MonadThrow m, FromText a) => XmlElement -> Text -> m a
 (.<) xml name = fromNamedText name $
     getSubElement xml name >>= getContentText
 
+-- | content "<tag>tag-content</tag>" === "tag-content"
 content :: (MonadThrow m, FromText t) => XmlElement -> m t
 content (T t) = fromText t
 content _ = monadThrow $ ParseError "This is not a content."
 
-elementM :: MonadThrow m => XmlElement -> Text -> (XmlElement -> m a) -> m (Maybe a)
-elementM el name conv = maybe
+-- | 'elementM conv name el' return Nothing if el doesn't have any elements named "name". otherwise, return Just a.
+elementM :: MonadThrow m
+         => Text -- ^ tag name
+         -> (XmlElement -> m a) -- ^ Convert function
+         -> XmlElement -- ^ element
+         -> m (Maybe a)
+elementM name conv el = maybe
     (return Nothing)
     (liftM Just . conv)
     (getSubElement el name)
 
-element :: MonadThrow m => XmlElement -> Text -> (XmlElement -> m a) -> m a
-element el name conv = elementM el name conv >>= maybe
+-- | This function throws error if the result of 'elementM' is Nothing.
+element :: MonadThrow m
+        => Text -- ^ tag name
+        -> (XmlElement -> m a) -- ^ convert function
+        -> XmlElement -- ^ element
+        -> m a
+element name conv el = elementM name conv el >>= maybe
     (monadThrow $ ParseError $ "element: element '" <> name <> "' not found")
     return
 
-elements :: MonadThrow m => XmlElement -> Text -> Text -> (XmlElement -> m a) -> m [a]
-elements el setname itemname conv = maybe
+elements :: MonadThrow m
+         => Text -- ^ name of sets
+         -> Text -- ^ name of item
+         -> (XmlElement -> m a) -- ^ convert function
+         -> XmlElement -- ^ element
+         -> m [a]
+elements setname itemname conv el = maybe
     (return [])
     (mapM conv . flip getSubElements itemname)
     (getSubElement el setname)

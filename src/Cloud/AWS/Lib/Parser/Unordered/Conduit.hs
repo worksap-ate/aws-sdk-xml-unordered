@@ -100,9 +100,9 @@ convert :: MonadThrow m => (XmlElement -> m a) -> ConduitM XmlElement o m a
 convert conv = await >>= maybe (lift . monadThrow $ ParseError "convert: no element") (lift . conv)
 
 convertConduit :: MonadBaseControl IO m => (XmlElement -> m a) -> Conduit XmlElement m a
-convertConduit conv = tryConvert conv >>= maybe (return ()) yield
+convertConduit conv = tryConvert conv >>= maybe (return ()) (\a -> yield a >> convertConduit conv)
 
--- | if conversion is success, it consume a element. otherwise, it does not consume any elements.
+-- | if conversion is success, it consume an element. otherwise, it does not consume any elements.
 tryConvert :: MonadBaseControl IO m
            => (XmlElement -> m a)
            -> ConduitM XmlElement o m (Maybe a)
@@ -116,7 +116,7 @@ tryConvert conv = await >>= maybe none (\el ->
             Left (_ :: SomeException) -> return Nothing
             Right a -> return $ Just a
 
-consumeElements :: MonadBaseControl IO m
+convertMany :: MonadBaseControl IO m
                 => (XmlElement -> m a)
                 -> ConduitM XmlElement o m [a]
-consumeElements conv = tryConvert conv >>= maybe (return []) (\a -> (a :) <$> consumeElements conv)
+convertMany conv = tryConvert conv >>= maybe (return []) (\a -> (a :) <$> convertMany conv)

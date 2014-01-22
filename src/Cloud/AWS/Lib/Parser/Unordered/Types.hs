@@ -18,3 +18,5 @@ data ParseError = ParseError
 instance Exception ParseError
 
 type ElementName = Text
+
+-- data ElementPath =
