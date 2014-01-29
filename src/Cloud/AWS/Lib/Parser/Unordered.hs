@@ -5,8 +5,12 @@ module Cloud.AWS.Lib.Parser.Unordered
     , ElementPath
     , (.=)
     , (.-)
+    , tag
     , end
+    , anytag
+    -- , mergePath
     , ParseError (..)
+    , elementConsumer
     , elementConduit
     , convert
     , tryConvert
@@ -17,6 +21,7 @@ module Cloud.AWS.Lib.Parser.Unordered
     , element
     , elementM
     , elements
+    -- , lookupTag
     ) where
 
 import Cloud.AWS.Lib.Parser.Unordered.Types

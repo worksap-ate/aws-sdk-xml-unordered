@@ -5,7 +5,6 @@ module Cloud.AWS.Lib.Parser.Unordered.Types where
 import Control.Exception (Exception)
 import Data.HashMap.Strict (HashMap)
 import Data.Text (Text)
-import Data.Tree (Tree)
 import Data.Typeable (Typeable)
 
 data XmlElement = HM (HashMap Text [XmlElement])
@@ -17,7 +16,3 @@ data ParseError = ParseError
     } deriving (Show, Typeable)
 
 instance Exception ParseError
-
-type ElementName = Text
-
-type ElementPath = Tree ElementName

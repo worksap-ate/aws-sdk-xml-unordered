@@ -16,7 +16,15 @@ import qualified Data.Text as T
 import Data.Tree
 import Data.XML.Types
 
+import Cloud.AWS.Lib.Parser.Unordered.Path
 import Cloud.AWS.Lib.Parser.Unordered.Types
+
+-- | sink top element
+-- e.g.,
+elementConsumer :: MonadThrow m
+                => Consumer Event m XmlElement
+elementConsumer = getElement >>=
+    maybe (monadThrow $ ParseError "elementConsumer: the top element is not found") return
 
 -- | map from 'Event' to 'XmlElement'.
 elementConduit :: MonadThrow m
@@ -26,8 +34,9 @@ elementConduit tree = go []
   where
     snoc l x = l ++ [x]
 
-    treeElem [path] (Node root []) = root == path
-    treeElem (path : paths) (Node root forest)
+    treeElem [path] (Node (TagName root) []) = root == path
+    treeElem (_ : paths) (Node AnyTag forest) = any (treeElem paths) forest
+    treeElem (path : paths) (Node (TagName root) forest)
         | root == path = any (treeElem paths) forest
         | otherwise = False
     treeElem _ _ = False
@@ -49,7 +58,7 @@ elementConduit tree = go []
                 CL.drop 1
                 if last now == nameLocalName name
                     then go $ init now
-                    else error "elementConduit: invalid XML"
+                    else monadThrow $ ParseError "elementConduit: invalid XML"
             Nothing -> return ()
             _ -> CL.drop 1 >> go now
 

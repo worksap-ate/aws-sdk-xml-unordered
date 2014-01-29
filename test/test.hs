@@ -14,6 +14,7 @@ main :: IO ()
 main = hspec $ do
     describe "xml parser" $ do
         it "parse normal xml" parseNormal
+        it "parse normal xml by elementSink" parseNormal'
         it "parse xml which contains unordered elements" parseUnordered
         it "parse xml which contains empty list" parseEmptyList
         it "parse xml which does not contain itemSet tag" parseNotAppearItemSet
@@ -70,6 +71,61 @@ parseNormal = do
     d <- common input
     d `shouldBe` input'
   where
+    input = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<data>"
+        , "  <id>1</id>"
+        , "  <name>test</name>"
+        , "  <description>this is test</description>"
+        , "  <itemSet>"
+        , "    <item>"
+        , "      <id>1</id>"
+        , "      <name>item1</name>"
+        , "      <description>this is item1</description>"
+        , "      <subItem>"
+        , "        <id>11</id>"
+        , "        <name>item1sub</name>"
+        , "      </subItem>"
+        , "    </item>"
+        , "    <item>"
+        , "      <id>2</id>"
+        , "      <name>item2</name>"
+        , "    </item>"
+        , "  </itemSet>"
+        , "</data>"
+        ]
+    input' = TestData
+        { testDataId = 1
+        , testDataName = "test"
+        , testDataDescription = Just "this is test"
+        , testDataItemsSet =
+            [ TestItem
+                { testItemId = 1
+                , testItemName = "item1"
+                , testItemDescription = Just "this is item1"
+                , testItemSubItem = Just TestItem
+                    { testItemId = 11
+                    , testItemName = "item1sub"
+                    , testItemDescription = Nothing
+                    , testItemSubItem = Nothing
+                    }
+                }
+            , TestItem
+                { testItemId = 2
+                , testItemName = "item2"
+                , testItemDescription = Nothing
+                , testItemSubItem = Nothing
+                }
+            ]
+        }
+
+parseNormal' :: Expectation
+parseNormal' = do
+    e <- top input
+    d <- element "data" dataConv e
+    d `shouldBe` input'
+  where
+    top i = parseLBS def i $$ elementSink
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<data>"

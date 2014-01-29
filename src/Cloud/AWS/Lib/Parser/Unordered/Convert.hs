@@ -6,6 +6,7 @@ module Cloud.AWS.Lib.Parser.Unordered.Convert
     , element
     , elementM
     , elements
+    , lookupTag
     ) where
 
 import Control.Monad
@@ -42,10 +43,10 @@ content :: (MonadThrow m, FromText t) => XmlElement -> m t
 content (T t) = fromText t
 content _ = monadThrow $ ParseError "This is not a content."
 
--- | 'elementM conv name el' return Nothing if el doesn't have any elements named "name". otherwise, return Just a.
+-- | 'elementM conv name el' return Nothing if 'el' doesn't have any elements named "name". otherwise, return 'Just a'.
 elementM :: MonadThrow m
          => Text -- ^ tag name
-         -> (XmlElement -> m a) -- ^ Convert function
+         -> (XmlElement -> m a) -- ^ Conversion function
          -> XmlElement -- ^ element
          -> m (Maybe a)
 elementM name conv el = maybe
@@ -56,7 +57,7 @@ elementM name conv el = maybe
 -- | This function throws error if the result of 'elementM' is Nothing.
 element :: MonadThrow m
         => Text -- ^ tag name
-        -> (XmlElement -> m a) -- ^ convert function
+        -> (XmlElement -> m a) -- ^ conversion function
         -> XmlElement -- ^ element
         -> m a
 element name conv el = elementM name conv el >>= maybe
@@ -73,3 +74,12 @@ elements setname itemname conv el = maybe
     (return [])
     (mapM conv . flip getSubElements itemname)
     (getSubElement el setname)
+
+lookupTag :: MonadThrow m
+          => Text
+          -> XmlElement
+          -> m XmlElement
+lookupTag name el = case getSubElements el name of
+    [e] -> return e
+    [] -> monadThrow $ ParseError $ "lookupTag: tag '" <> name <> "' not found"
+    _ -> monadThrow $ ParseError $ "lookupTag: tag '" <> name <> "' is list. please use lookupTags."
