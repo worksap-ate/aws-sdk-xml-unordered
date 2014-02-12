@@ -125,7 +125,7 @@ parseNormal' = do
     d <- element "data" dataConv e
     d `shouldBe` input'
   where
-    top i = parseLBS def i $$ elementSink
+    top i = parseLBS def i $$ elementConsumer
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<data>"
