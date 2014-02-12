@@ -2,7 +2,7 @@
 
 import Control.Applicative ((<$>), (<*>), Applicative)
 import qualified Data.ByteString.Lazy as L
-import Data.Conduit (($$), ($=), MonadThrow (..), runResourceT, Source)
+import Data.Conduit (($$), ($=), MonadThrow (..), runResourceT)
 import qualified Data.Conduit.List as CL
 import Data.Text (Text)
 import Test.Hspec
@@ -12,25 +12,26 @@ import Cloud.AWS.Lib.Parser.Unordered
 
 main :: IO ()
 main = hspec $ do
-    describe "xml parser" $ do
-        it "parse normal xml" parseNormal
-        it "parse normal xml by elementSink" parseNormal'
-        it "parse xml which contains unordered elements" parseUnordered
-        it "parse xml which contains empty list" parseEmptyList
-        it "parse xml which does not contain itemSet tag" parseNotAppearItemSet
-        it "cannot parse unexpected xml structure" notParseUnexpectedDataStructure
+    describe "unordered parser" $ do
+        it "can parse normal xml" parseNormal
+        it "can parse xml which contains unordered elements" parseUnordered
+        it "cannot parse empty xml" cannotParseEmpty
+        it "can parse xml which contains empty list" parseEmptyList
+        it "can parse xml which does not contain itemSet tag" parseNotAppearItemSet
+        it "cannot parse unexpected xml structure" cannotParseUnexpectedDataStructure
         it "ignore unexpected tag" ignoreUnexpectedTag
-        it "parse top data set" parseTopDataSet
-        it "parse list of text" parseList
+        it "can parse top data set" parseTopDataSet
+        it "can parse list of text" parseList
         it "cannot parse list of text" parseListFailure
-        it "parse escaped content" parseEscaped
+        it "can parse escaped content" parseEscaped
         it "can parse ec2response-like xml" parseEC2Response
-    describe "xml parser of maybe version" $
-        it "parse empty xml" parseEmpty
-    describe "xml parser of conduit version" $ do
-        it "parse normal xml" parseTopDataSetConduit
-        it "parse empty itemSet" parseEmptyItemSetConduit
+    describe "unordered parser using conduit" $ do
+        it "can parse normal xml" parseTopDataSetConduit
+        it "can parse empty itemSet" parseEmptyItemSetConduit
+        it "can parse ec2response-like xml" parseEC2ResponseConduit
 
+parseError :: Selector ParseError
+parseError = const True
 
 data TestData = TestData
     { testDataId :: Int
@@ -47,29 +48,26 @@ data TestItem = TestItem
     } deriving (Eq, Show)
 
 dataConv :: (MonadThrow m, Applicative m) => XmlElement -> m TestData
-dataConv xml = TestData
-    <$> xml .< "id"
-    <*> xml .< "name"
-    <*> xml .< "description"
-    <*> elements "itemSet" "item" itemConv xml
+dataConv e = TestData
+    <$> e .< "id"
+    <*> e .< "name"
+    <*> e .< "description"
+    <*> elements "itemSet" "item" itemConv e
 
 itemConv :: (MonadThrow m, Applicative m) => XmlElement -> m TestItem
-itemConv xml = TestItem
-    <$> xml .< "id"
-    <*> xml .< "name"
-    <*> xml .< "description"
-    <*> elementM "subItem" itemConv xml
+itemConv e = TestItem
+    <$> e .< "id"
+    <*> e .< "name"
+    <*> e .< "description"
+    <*> elementM "subItem" itemConv e
 
-sourceData :: MonadThrow m => L.ByteString -> Source m XmlElement
-sourceData input = parseLBS def input $= elementConduit (end "data")
-
-common :: L.ByteString -> IO TestData
-common input = runResourceT $ sourceData input $$ convert (element "data" dataConv)
+getElement :: MonadThrow m => L.ByteString -> m XmlElement
+getElement input = parseLBS def input $$ elementConsumer
 
 parseNormal :: Expectation
 parseNormal = do
-    d <- common input
-    d `shouldBe` input'
+    result <- getElement input >>= element "data" dataConv
+    result `shouldBe` expectedData
   where
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -94,62 +92,7 @@ parseNormal = do
         , "  </itemSet>"
         , "</data>"
         ]
-    input' = TestData
-        { testDataId = 1
-        , testDataName = "test"
-        , testDataDescription = Just "this is test"
-        , testDataItemsSet =
-            [ TestItem
-                { testItemId = 1
-                , testItemName = "item1"
-                , testItemDescription = Just "this is item1"
-                , testItemSubItem = Just TestItem
-                    { testItemId = 11
-                    , testItemName = "item1sub"
-                    , testItemDescription = Nothing
-                    , testItemSubItem = Nothing
-                    }
-                }
-            , TestItem
-                { testItemId = 2
-                , testItemName = "item2"
-                , testItemDescription = Nothing
-                , testItemSubItem = Nothing
-                }
-            ]
-        }
-
-parseNormal' :: Expectation
-parseNormal' = do
-    e <- top input
-    d <- element "data" dataConv e
-    d `shouldBe` input'
-  where
-    top i = parseLBS def i $$ elementConsumer
-    input = L.concat
-        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-        , "<data>"
-        , "  <id>1</id>"
-        , "  <name>test</name>"
-        , "  <description>this is test</description>"
-        , "  <itemSet>"
-        , "    <item>"
-        , "      <id>1</id>"
-        , "      <name>item1</name>"
-        , "      <description>this is item1</description>"
-        , "      <subItem>"
-        , "        <id>11</id>"
-        , "        <name>item1sub</name>"
-        , "      </subItem>"
-        , "    </item>"
-        , "    <item>"
-        , "      <id>2</id>"
-        , "      <name>item2</name>"
-        , "    </item>"
-        , "  </itemSet>"
-        , "</data>"
-        ]
-    input' = TestData
+    expectedData = TestData
         { testDataId = 1
         , testDataName = "test"
         , testDataDescription = Just "this is test"
@@ -176,8 +119,8 @@ parseNormal' = do
 
 parseUnordered :: Expectation
 parseUnordered = do
-    d <- common input
-    d `shouldBe` input'
+    result <- getElement input >>= element "data" dataConv
+    result `shouldBe` expectedData
   where
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -202,7 +145,7 @@ parseUnordered = do
         , "  <id>1</id>"
         , "</data>"
         ]
-    input' = TestData
+    expectedData = TestData
         { testDataId = 1
         , testDataName = "test"
         , testDataDescription = Just "this is test"
@@ -227,19 +170,17 @@ parseUnordered = do
             ]
         }
 
-parseEmpty :: Expectation
-parseEmpty = do
-    d <- runResourceT $ sourceData input $$
-        tryConvert (element "data" dataConv)
-    d `shouldBe` input'
+cannotParseEmpty :: Expectation
+cannotParseEmpty =
+    (getElement input >>= element "data" dataConv)
+        `shouldThrow` parseError
   where
     input = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-    input' = Nothing
 
 parseEmptyList :: Expectation
 parseEmptyList = do
-    d <- common input
-    d `shouldBe` input'
+    result <- getElement input >>= element "data" dataConv
+    result `shouldBe` expectedData
   where
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -251,7 +192,7 @@ parseEmptyList = do
         , "  </itemSet>"
         , "</data>"
         ]
-    input' = TestData
+    expectedData = TestData
         { testDataId = 1
         , testDataName = "test"
         , testDataDescription = Just "this is test"
@@ -260,8 +201,8 @@ parseEmptyList = do
 
 parseNotAppearItemSet :: Expectation
 parseNotAppearItemSet = do
-    d <- common input
-    d `shouldBe` input'
+    result <- getElement input >>= element "data" dataConv
+    result `shouldBe` expectedData
   where
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -270,16 +211,17 @@ parseNotAppearItemSet = do
         , "  <name>test</name>"
         , "</data>"
         ]
-    input' = TestData
+    expectedData = TestData
         { testDataId = 1
         , testDataName = "test"
         , testDataDescription = Nothing
         , testDataItemsSet = []
         }
 
-notParseUnexpectedDataStructure :: Expectation
-notParseUnexpectedDataStructure =
-    common input `shouldThrow` errorCall "FromText error: no text name=name"
+cannotParseUnexpectedDataStructure :: Expectation
+cannotParseUnexpectedDataStructure =
+    (getElement input >>= element "data" dataConv)
+        `shouldThrow` anyException -- errorCall "FromText error: no text name=name"
   where
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -294,8 +236,8 @@ notParseUnexpectedDataStructure =
 
 ignoreUnexpectedTag :: Expectation
 ignoreUnexpectedTag = do
-    d <- common input
-    d `shouldBe` input'
+    result <- getElement input >>= element "data" dataConv
+    result `shouldBe` expectedData
   where
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -310,7 +252,7 @@ ignoreUnexpectedTag = do
         , "  <unexpectedTag>tag</unexpectedTag>"
         , "</data>"
         ]
-    input' = TestData
+    expectedData = TestData
         { testDataId = 1
         , testDataName = "test"
         , testDataDescription = Nothing
@@ -319,11 +261,9 @@ ignoreUnexpectedTag = do
 
 parseTopDataSet :: Expectation
 parseTopDataSet = do
-    d <- runResourceT $ parseLBS def input $= mapElem $$
-        convertMany (element "data" dataConv)
-    d `shouldBe` input'
+    result <- getElement input >>= elements "dataSet" "data" dataConv
+    result `shouldBe` expectedData
   where
-    mapElem = elementConduit $ "dataSet" .- end "data"
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<dataSet>"
@@ -340,7 +280,7 @@ parseTopDataSet = do
         , "  </data>"
         , "</dataSet>"
         ]
-    input' =
+    expectedData =
         [ TestData
             { testDataId = 1
             , testDataName = "test1"
@@ -357,10 +297,10 @@ parseTopDataSet = do
 
 parseTopDataSetConduit :: Expectation
 parseTopDataSetConduit = do
-    d <- runResourceT $ parseLBS def input $= mapElem $=
+    result <- runResourceT $ parseLBS def input $= mapElem $=
         convertConduit (element "data" dataConv) $$
         CL.consume
-    d `shouldBe` input'
+    result `shouldBe` expectedData
   where
     mapElem = elementConduit $ "dataSet" .- end "data"
     input = L.concat
@@ -379,7 +319,7 @@ parseTopDataSetConduit = do
         , "  </data>"
         , "</dataSet>"
         ]
-    input' =
+    expectedData =
         [ TestData
             { testDataId = 1
             , testDataName = "test1"
@@ -396,10 +336,10 @@ parseTopDataSetConduit = do
 
 parseEmptyItemSetConduit :: Expectation
 parseEmptyItemSetConduit = do
-    d <- runResourceT $ parseLBS def input $= mapElem $=
+    result <- runResourceT $ parseLBS def input $= mapElem $=
         convertConduit (element "data" dataConv) $$
         CL.consume
-    d `shouldBe` input'
+    result `shouldBe` expectedData
   where
     mapElem = elementConduit $ "dataSet" .- end "data"
     input = L.concat
@@ -407,15 +347,13 @@ parseEmptyItemSetConduit = do
         , "<dataSet>"
         , "</dataSet>"
         ]
-    input' = []
+    expectedData = []
 
 parseList :: Expectation
 parseList = do
-    d <- runResourceT $ parseLBS def input $= mapElem $$
-        convertMany (element "data" content)
-    d `shouldBe` input'
+    result <- getElement input >>= elements "dataSet" "data" content
+    result `shouldBe` expectedData
   where
-    mapElem = elementConduit $ "dataSet" .- end "data"
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<dataSet>"
@@ -424,14 +362,15 @@ parseList = do
         , "<data>item</data>"
         , "</dataSet>"
         ]
-    input' = ["item", "item", "item"] :: [Text]
+    expectedData = ["item", "item", "item"] :: [Text]
 
 parseListFailure :: Expectation
-parseListFailure = do
-    runResourceT $ sourceData input $$
-        convert (element "data" (content :: MonadThrow m => XmlElement -> m Text))
-    `shouldThrow` anyException
+parseListFailure =
+    (getElement input >>= elements "dataSet" "data" c)
+        `shouldThrow` parseError
   where
+    c :: XmlElement -> IO Text
+    c = content
     input = L.concat
         [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         , "<dataSet>"
@@ -441,22 +380,58 @@ parseListFailure = do
 
 parseEscaped :: Expectation
 parseEscaped = do
-    d <- runResourceT $ parseLBS def input $= mapElem $$ convert (.< "escaped")
-    d `shouldBe` input'
+    result <- getElement input >>= (.< "escaped")
+    result `shouldBe` expectedData
   where
-    mapElem = elementConduit $ end "escaped"
     input = "<escaped>{&quot;version&quot;:&quot;1.0&quot;,&quot;queryDate&quot;:&quot;2013-05-08T21:09:40.443+0000&quot;,&quot;startDate&quot;:&quot;2013-05-08T20:09:00.000+0000&quot;,&quot;statistic&quot;:&quot;Maximum&quot;,&quot;period&quot;:3600,&quot;recentDatapoints&quot;:[6.89],&quot;threshold&quot;:90.5}</escaped>"
-    input' = "{\"version\":\"1.0\",\"queryDate\":\"2013-05-08T21:09:40.443+0000\",\"startDate\":\"2013-05-08T20:09:00.000+0000\",\"statistic\":\"Maximum\",\"period\":3600,\"recentDatapoints\":[6.89],\"threshold\":90.5}" :: Text
+    expectedData = "{\"version\":\"1.0\",\"queryDate\":\"2013-05-08T21:09:40.443+0000\",\"startDate\":\"2013-05-08T20:09:00.000+0000\",\"statistic\":\"Maximum\",\"period\":3600,\"recentDatapoints\":[6.89],\"threshold\":90.5}" :: Text
 
 parseEC2Response :: Expectation
 parseEC2Response = do
+    (rid, d, nt) <- getElement (input True False) >>= element "response" conv
+    rid `shouldBe` Just "req-id"
+    d `shouldBe` expectedData
+    nt `shouldBe` Nothing
+    (rid', d', nt') <- getElement (input False True) >>= element "response" conv
+    rid' `shouldBe` Nothing
+    d' `shouldBe` expectedData
+    nt' `shouldBe` Just "next-token"
+  where
+    conv :: (MonadThrow m, Applicative m) => XmlElement -> m (Maybe Text, TestData, Maybe Text)
+    conv e = (,,)
+        <$> e .< "requestId"
+        <*> element "data" dataConv e
+        <*> e .< "nextToken"
+    input hasReqId hasNextToken = L.concat
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        , "<response>"
+        , if hasReqId then "  <requestId>req-id</requestId>" else ""
+        , "  <data>"
+        , "    <id>1</id>"
+        , "    <name>test1</name>"
+        , "    <itemSet>"
+        , "    </itemSet>"
+        , "    <description>this is test</description>"
+        , "  </data>"
+        , if hasNextToken then "  <nextToken>next-token</nextToken>" else ""
+        , "</response>"
+        ]
+    expectedData = TestData
+        { testDataId = 1
+        , testDataName = "test1"
+        , testDataDescription = Just "this is test"
+        , testDataItemsSet = []
+        }
+
+parseEC2ResponseConduit :: Expectation
+parseEC2ResponseConduit = do
     (rid, d, nt) <- runResourceT $ parseLBS def (input True False) $= mapElem $$ sink
     rid `shouldBe` Just ("req-id" :: Text)
-    d `shouldBe` input'
+    d `shouldBe` expectedData
     nt `shouldBe` (Nothing :: Maybe Text)
     (rid', d', nt') <- runResourceT $ parseLBS def (input False True) $= mapElem $$ sink
     rid' `shouldBe` Nothing
-    d' `shouldBe` input'
+    d' `shouldBe` expectedData
     nt' `shouldBe` Just "next-token"
   where
     mapElem = elementConduit $ "response" .=
@@ -489,7 +464,7 @@ parseEC2Response = do
         , if hasNextToken then "  <nextToken>next-token</nextToken>" else ""
         , "</response>"
         ]
-    input' =
+    expectedData =
         [ TestData
             { testDataId = 1
             , testDataName = "test1"

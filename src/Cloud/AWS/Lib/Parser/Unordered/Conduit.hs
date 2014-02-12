@@ -19,7 +19,7 @@ import Data.XML.Types
 import Cloud.AWS.Lib.Parser.Unordered.Path
 import Cloud.AWS.Lib.Parser.Unordered.Types
 
--- | sink top element
+-- | top-level xml element consumer.
 -- e.g.,
 elementConsumer :: MonadThrow m
                 => Consumer Event m XmlElement
@@ -62,7 +62,7 @@ elementConduit tree = go []
             Nothing -> return ()
             _ -> CL.drop 1 >> go now
 
--- | Drop unnecessary event.
+-- | Drop unnecessary events.
 drops :: Monad m => ConduitM Event o m ()
 drops = do
     e <- CL.peek
