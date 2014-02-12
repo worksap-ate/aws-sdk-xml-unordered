@@ -3,6 +3,7 @@
 module Cloud.AWS.Lib.Parser.Unordered
     ( XmlElement
     , ElementPath
+    , ElementName
     , (.=)
     , (.-)
     , tag
