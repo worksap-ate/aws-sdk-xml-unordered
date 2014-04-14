@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Control.Applicative ((<$>), (<*>), Applicative)
+import Control.Monad.Trans.Resource(MonadThrow, runResourceT)
 import qualified Data.ByteString.Lazy as L
-import Data.Conduit (($$), ($=), MonadThrow (..), runResourceT)
+import Data.Conduit (($$), ($=))
 import qualified Data.Conduit.List as CL
 import Data.Text (Text)
 import Test.Hspec

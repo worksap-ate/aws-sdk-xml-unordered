@@ -6,6 +6,7 @@ import Control.Applicative
 import Control.Exception (SomeException)
 import Control.Exception.Lifted (try)
 import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Resource (MonadThrow, MonadBaseControl, monadThrow)
 import Data.Char (isSpace)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
