@@ -10,7 +10,7 @@ module Cloud.AWS.Lib.Parser.Unordered.Convert
     ) where
 
 import Control.Monad
-import Data.Conduit
+import Control.Monad.Trans.Resource (MonadThrow, monadThrow)
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe
 import Data.Monoid
