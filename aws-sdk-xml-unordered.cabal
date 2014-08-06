@@ -1,5 +1,5 @@
 name:                aws-sdk-xml-unordered
-version:             0.3.0.1
+version:             0.3.1
 synopsis:            The xml parser for aws-sdk package
 description:         This package provides the unordered xml parser for aws-sdk package.
 license:             BSD3
